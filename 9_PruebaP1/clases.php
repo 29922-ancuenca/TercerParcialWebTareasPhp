@@ -9,7 +9,7 @@ class IngredienteRepository
 
     public function __construct(mysqli $con)
     {
-        $this->con = $con;
+        $this->con  = $con;
     }
 
     /**
