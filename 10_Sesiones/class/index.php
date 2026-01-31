@@ -16,27 +16,34 @@
 
 require_once("Notebook.php");
 
-$chronos = new Notebook(2,"Samsung",590000);
-$acer = new Notebook(1,"Acer",350000);
-$compaq = new Notebook(3,"Compaq",260000);
-$dell = new Notebook(4,"Dell",40000);
+// Conexión a la base de datos 
+$conexion = new mysqli("localhost", "root", "123", "SesionesBD");
+
+if ($conexion->connect_errno) {
+	die("Error de conexión a la base de datos: " . $conexion->connect_error);
+}
 
 /*
-	echo "<h1>". $chronos->getMarca()."</h1>";
-	echo "Precio: $". $chronos->getPrecio();
-	echo "<h1>". $acer->getMarca()."</h1>";
-	echo "Precio: $". $acer->getPrecio();
-	echo "<h1>". $compaq->getMarca()."</h1>";
-	echo "Precio: $". $compaq->getPrecio();
+	Obtener los datos de la tabla `notebook` y
+	llenar el arreglo de objetos Notebook a partir de la BD
 */
 
-	/*Arreglo*/
+$sql = "SELECT Codigo, Marca, Precio FROM notebook";
+$resultado = $conexion->query($sql);
 
-	$notebooks= array();
-	$notebooks['Acer']=$acer;
-	$notebooks['Samsung']=$chronos;
-	$notebooks['Compaq']=$compaq;
-    $notebooks['Dell']=$dell;
+$notebooks = array();
+
+if ($resultado) {
+	while ($fila = $resultado->fetch_assoc()) {
+		$nota = new Notebook($fila['Codigo'], $fila['Marca'], $fila['Precio']);
+		// Usamos la marca como índice
+		$notebooks[$fila['Marca']] = $nota;
+	}
+	$resultado->free();
+}
+
+$conexion->close();
+
 	
 /*
 	//Mostrar el precio
