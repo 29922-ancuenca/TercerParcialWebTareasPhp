@@ -70,10 +70,10 @@ class vehiculo{
 		$this->combustible = $_POST['combustibleRBT'];
 		
 		 
-				echo "<br> FILES <br>";
+				/*echo "<br> FILES <br>";
 				echo "<pre>";
 					print_r($_FILES);
-				echo "</pre>";
+				echo "</pre>";*/
 		     
 		
 		
@@ -220,10 +220,10 @@ public function get_form($id=NULL){
         }else{   
         
           // ***** TUPLA ENCONTRADA *****
-            echo "<br>TUPLA <br>";
+            /*echo "<br>TUPLA <br>";
             echo "<pre>";
                 print_r($row);
-            echo "</pre>";
+            echo "</pre>";*/
         
             $this->placa = $row['placa'];
             $this->marca = $row['marca'];
@@ -315,24 +315,70 @@ public function get_form($id=NULL){
     return $html;
 }
 	
-public function get_list(){
+public function get_list($placa_buscar = NULL){
     $d_new = "new/0";
     $d_new_final = base64_encode($d_new);
 
+    // Valor actual de búsqueda para mantenerlo en el input
+    $valor_busqueda = ($placa_buscar !== NULL) ? $placa_buscar : "";
+
+    // Verificar si el usuario es administrador (ADM)
+    $es_admin = (isset($_SESSION['usuario']) && $_SESSION['usuario'] === 'ADM')
+             || (isset($_SESSION['rol']) && $_SESSION['rol'] === 'ADM');
+
+    // Usuarios con rol 'R' (roles_id=2) solo pueden leer
+    $solo_lectura = (isset($_SESSION['rol']) && $_SESSION['rol'] === 'R');
+
     $html = '
-    <h1 align="center">VEHÍCULOS PARTE III</h1>
+    <h1 align="center">VEHÍCULOS PARTE III</h1>';
+
+    // La barra de búsqueda solo se muestra si NO es administrador
+    if(!$es_admin){
+        $html .= '
+    <div class="container mb-3">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <form class="input-group" method="POST" action="index.php?mod=vehiculo">
+                    <input type="text" name="placa_buscar" class="form-control" placeholder="Buscar por placa" value="' . $valor_busqueda . '" required>
+                    <button class="btn btn-primary" type="submit" name="btnBuscar">Buscar</button>
+                </form>
+            </div>
+        </div>
+    </div>';
+    }
+
+    $html .= '
 
     <table class="table table-bordered" align="center">
         <tr>
             <th colspan="8">Lista de Vehículos</th>
-        </tr>
+        </tr>';
+
+    // Fila de botón Nuevo solo para usuarios con permisos de escritura
+    if(!$solo_lectura){
+        $html .= '
         <tr>
             <th colspan="8">
                 <a href="index.php?d=' . $d_new_final . '" class="btn btn-primary">
                     Nuevo
                 </a>
             </th>
-        </tr>
+        </tr>';
+    }
+
+    // Cabecera de acciones: 1 columna para solo lectura, 3 para CRUD completo
+    if($solo_lectura){
+        $html .= '
+        <tr>
+            <th>Placa</th>
+            <th>Marca</th>
+            <th>Color</th>
+            <th>Año</th>
+            <th>Avalúo</th>
+            <th>Acciones</th>
+        </tr>';
+    }else{
+        $html .= '
         <tr>
             <th>Placa</th>
             <th>Marca</th>
@@ -341,10 +387,19 @@ public function get_list(){
             <th>Avalúo</th>
             <th colspan="3">Acciones</th>
         </tr>';
+    }
 
     $sql = "SELECT v.id, v.placa, m.descripcion as marca, c.descripcion as color, v.anio, v.avaluo
             FROM vehiculo v, color c, marca m
-            WHERE v.marca=m.id AND v.color=c.id;";
+            WHERE v.marca=m.id AND v.color=c.id";
+
+    // Si viene una placa para buscar, se agrega a la consulta
+    if($placa_buscar !== NULL && $placa_buscar !== ''){
+        $placa_buscar = $this->con->real_escape_string($placa_buscar);
+        $sql .= " AND v.placa LIKE '%$placa_buscar%'";
+    }
+
+    $sql .= ";";
 
     $res = $this->con->query($sql);
 
@@ -353,7 +408,20 @@ public function get_list(){
         $d_act_final = base64_encode("act/" . $row['id']);
         $d_det_final = base64_encode("det/" . $row['id']);
 
-        $html .= '
+        if($solo_lectura){
+            // Solo se muestra la opción de Detalle
+            $html .= '
+        <tr>
+            <td>' . $row['placa'] . '</td>
+            <td>' . $row['marca'] . '</td>
+            <td>' . $row['color'] . '</td>
+            <td>' . $row['anio'] . '</td>
+            <td>' . $row['avaluo'] . '</td>
+            <td><a class="btn btn-info btn-sm" href="index.php?d=' . $d_det_final . '">Detalle</a></td>
+        </tr>';
+        }else{
+            // CRUD completo
+            $html .= '
         <tr>
             <td>' . $row['placa'] . '</td>
             <td>' . $row['marca'] . '</td>
@@ -364,6 +432,7 @@ public function get_list(){
             <td><a class="btn btn-warning btn-sm" href="index.php?d=' . $d_act_final . '">Actualizar</a></td>
             <td><a class="btn btn-info btn-sm" href="index.php?d=' . $d_det_final . '">Detalle</a></td>
         </tr>';
+        }
     }
     $html .= '
     </table>

@@ -156,6 +156,87 @@ public function get_form($id=NULL){
   }
 }
 
+// =======================
+// FORMULARIO PARA AGENTE
+// =======================
+public function get_form_agente(){
+
+  // Solo debe usarse para usuarios con rol de lectura (placa como usuario)
+  if(!isset($_SESSION['usuario'])){
+    $mensaje = "acceder al formulario de matriculación como agente";
+    echo $this->_message_error($mensaje);
+    return;
+  }
+
+  $placa = $this->con->real_escape_string($_SESSION['usuario']);
+
+  // Buscar el vehículo asociado a la placa del usuario
+  $sql = "SELECT id, placa, anio FROM vehiculo WHERE placa='$placa' LIMIT 1";
+  $res = $this->con->query($sql);
+  $row = $res ? $res->fetch_assoc() : null;
+
+  if(!$row){
+    $mensaje = "no existe un vehículo registrado con la placa: $placa";
+    echo $this->_message_error($mensaje);
+    return;
+  }
+
+  $this->vehiculo = $row['id'];
+  $this->anio     = $row['anio'];
+  $this->agencia  = NULL;
+  $this->fecha    = date('Y-m-d');
+
+  $html = '
+  <form name="Form_matricula_agente" method="POST" action="index.php?mod=matricula&accion=agente">
+    <input type="hidden" name="id" value="0">
+    <input type="hidden" name="op" value="new">
+    <input type="hidden" name="vehiculo" value="' . $this->vehiculo . '">
+    <input type="hidden" name="anio" value="' . $this->anio . '">
+
+    <div class="container mt-4">
+      <div class="table-responsive">
+        <table class="table table-bordered table-striped table-hover align-middle w-auto mx-auto text-center">
+          <thead class="table-dark">
+            <tr>
+              <th colspan="2">DATOS MATRÍCULA (AGENTE)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="text-start fw-semibold">Placa (vehículo):</td>
+              <td class="text-start">' . $row['placa'] . '</td>
+            </tr>
+            <tr>
+              <td class="text-start fw-semibold">Año (vehículo):</td>
+              <td class="text-start">' . $this->anio . '</td>
+            </tr>
+            <tr>
+              <td class="text-start fw-semibold">Fecha:</td>
+              <td class="text-start"><input type="date" name="fecha" value="' . $this->fecha . '" required></td>
+            </tr>
+            <tr>
+              <td class="text-start fw-semibold">Agencia:</td>
+              <td class="text-start">' . $this->_get_combo_db("agencia","id","descripcion","agencia",$this->agencia) . '</td>
+            </tr>
+            <tr>
+              <th colspan="2">
+                <input type="submit" name="Guardar" value="GUARDAR" class="btn btn-success px-4">
+              </th>
+            </tr>
+            <tr>
+              <th colspan="2">
+                <a href="index.html" class="btn btn-secondary px-4">Regresar</a>
+              </th>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>';
+
+  return $html;
+}
+
   // =======================
   // READ (LIST)
   // =======================
@@ -163,32 +244,61 @@ public function get_list(){
 
     $d_new = "new/0";
     $d_new_final = base64_encode($d_new);
+  // Usuarios con rol 'R' (roles_id=2) solo pueden leer
+  $solo_lectura = (isset($_SESSION['rol']) && $_SESSION['rol'] === 'R');
 
-    $html = '
-    <h1 align="center">MATRÍCULAS PARTE III</h1>
+  $html = '
+  <h1 align="center">MATRÍCULAS PARTE III</h1>
 
-    <table class="table table-bordered" align="center">
-        <tr>
-            <th colspan="7">Lista de Matrículas</th>
-        </tr>
-        <tr>
-            <th colspan="7">
-                <a href="index.php?mod=matricula&d=' . $d_new_final . '" class="btn btn-primary">
-                    Nuevo
-                </a>
-            </th>
-        </tr>
-        <tr>
-            <th>Fecha</th>
-            <th>Vehículo</th>
-            <th>Agencia</th>
-            <th>Año</th>
-            <th colspan="3">Acciones</th>
-        </tr>';
+  <table class="table table-bordered" align="center">
+    <tr>
+      <th colspan="7">Lista de Matrículas</th>
+    </tr>';
+
+  // Fila de botón Nuevo solo para usuarios con permisos de escritura
+  if(!$solo_lectura){
+    $html .= '
+    <tr>
+      <th colspan="7">
+        <a href="index.php?mod=matricula&d=' . $d_new_final . '" class="btn btn-primary">
+          Nuevo
+        </a>
+      </th>
+    </tr>';
+  }
+
+  // Cabecera de acciones: 1 columna para solo lectura, 3 para CRUD completo
+  if($solo_lectura){
+    $html .= '
+    <tr>
+      <th>Fecha</th>
+      <th>Vehículo</th>
+      <th>Agencia</th>
+      <th>Año</th>
+      <th>Acciones</th>
+    </tr>';
+  }else{
+    $html .= '
+    <tr>
+      <th>Fecha</th>
+      <th>Vehículo</th>
+      <th>Agencia</th>
+      <th>Año</th>
+      <th colspan="3">Acciones</th>
+    </tr>';
+  }
 
     $sql = "SELECT m.id, m.fecha, v.placa, a.descripcion as agencia, m.anio
-            FROM matricula m, vehiculo v, agencia a
-            WHERE m.vehiculo = v.id AND m.agencia = a.id;";
+        FROM matricula m, vehiculo v, agencia a
+        WHERE m.vehiculo = v.id AND m.agencia = a.id";
+
+    // Si es usuario de solo lectura, mostrar solo las matrículas de su propia placa
+    if($solo_lectura && isset($_SESSION['usuario'])){
+      $placa_usuario = $this->con->real_escape_string($_SESSION['usuario']);
+      $sql .= " AND v.placa = '" . $placa_usuario . "'";
+    }
+
+    $sql .= ";";
 
     $res = $this->con->query($sql);
     $num = $res->num_rows;
@@ -197,20 +307,33 @@ public function get_list(){
 
         while($row = $res->fetch_assoc()){
 
-            $d_del_final = base64_encode('del/' . $row['id']);
-            $d_act_final = base64_encode('act/' . $row['id']);
-            $d_det_final = base64_encode('det/' . $row['id']);
+          $d_del_final = base64_encode('del/' . $row['id']);
+          $d_act_final = base64_encode('act/' . $row['id']);
+          $d_det_final = base64_encode('det/' . $row['id']);
 
+          if($solo_lectura){
+            // Solo se muestra la opción de Detalle
             $html .= '
-            <tr>
-                <td>' . $row['fecha'] . '</td>
-                <td>' . $row['placa'] . '</td>
-                <td>' . $row['agencia'] . '</td>
-                <td>' . $row['anio'] . '</td>
-                <td><a class="btn btn-danger btn-sm" href="index.php?mod=matricula&d=' . $d_del_final . '">Borrar</a></td>
-                <td><a class="btn btn-warning btn-sm" href="index.php?mod=matricula&d=' . $d_act_final . '">Actualizar</a></td>
-                <td><a class="btn btn-info btn-sm" href="index.php?mod=matricula&d=' . $d_det_final . '">Detalle</a></td>
-            </tr>';
+          <tr>
+            <td>' . $row['fecha'] . '</td>
+            <td>' . $row['placa'] . '</td>
+            <td>' . $row['agencia'] . '</td>
+            <td>' . $row['anio'] . '</td>
+            <td><a class="btn btn-info btn-sm" href="index.php?mod=matricula&d=' . $d_det_final . '">Detalle</a></td>
+          </tr>';
+          }else{
+            // CRUD completo
+            $html .= '
+          <tr>
+            <td>' . $row['fecha'] . '</td>
+            <td>' . $row['placa'] . '</td>
+            <td>' . $row['agencia'] . '</td>
+            <td>' . $row['anio'] . '</td>
+            <td><a class="btn btn-danger btn-sm" href="index.php?mod=matricula&d=' . $d_del_final . '">Borrar</a></td>
+            <td><a class="btn btn-warning btn-sm" href="index.php?mod=matricula&d=' . $d_act_final . '">Actualizar</a></td>
+            <td><a class="btn btn-info btn-sm" href="index.php?mod=matricula&d=' . $d_det_final . '">Detalle</a></td>
+          </tr>';
+          }
         }
 
     }else{
@@ -223,7 +346,7 @@ public function get_list(){
     </table>
 
     <div class="text-center mt-3">
-  	  <a href="index.php" class="btn btn-secondary">
+  	  <a href="index.html" class="btn btn-secondary">
         Regresar
       </a>
     </div>';
@@ -235,10 +358,20 @@ public function get_list(){
   // READ (DETAIL)
   // =======================
 public function get_detail_matricula($id){
+  // Determinar si es usuario de solo lectura (rol 'R')
+  $solo_lectura = (isset($_SESSION['rol']) && $_SESSION['rol'] === 'R');
 
   $sql = "SELECT m.fecha, v.placa, a.descripcion as agencia, m.anio
           FROM matricula m, vehiculo v, agencia a
-          WHERE m.id=$id AND m.vehiculo=v.id AND m.agencia=a.id;";
+          WHERE m.id=$id AND m.vehiculo=v.id AND m.agencia=a.id";
+
+  // Si es de solo lectura, solo puede ver detalle de matrículas de su propia placa
+  if($solo_lectura && isset($_SESSION['usuario'])){
+    $placa_usuario = $this->con->real_escape_string($_SESSION['usuario']);
+    $sql .= " AND v.placa = '" . $placa_usuario . "'";
+  }
+
+  $sql .= ";";
 
   $res = $this->con->query($sql);
   $row = $res->fetch_assoc();
@@ -353,7 +486,7 @@ public function get_detail_matricula($id){
     $html = '
     <table border="0" align="center">
       <tr>
-        <th> NO existen registros en la ' . $tipo . 'Favor contactar a .................... </th>
+        <th> NO existen registros en la ' . $tipo . 'Asociadas a este usuario </th>
       </tr>
     </table>';
     return $html;

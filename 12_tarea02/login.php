@@ -19,8 +19,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         }
         $cn->set_charset("utf8");
 
-        // Validar que el username y contraseña existan en la BD
-        $sql = "SELECT id, username FROM usuarios WHERE username = ? AND password = ? LIMIT 1";
+        // Validar que el username y contraseña existan en la BD y obtener su rol
+        $sql = "SELECT u.id, u.username, r.rol
+          FROM usuarios u
+          LEFT JOIN roles r ON u.roles_id = r.id
+          WHERE u.username = ? AND u.password = ?
+          LIMIT 1";
         $stmt = $cn->prepare($sql);
         if ($stmt) {
             $stmt->bind_param('ss', $usuario, $clave);
@@ -28,9 +32,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
             $resultado = $stmt->get_result();
 
             if ($resultado && $resultado->num_rows === 1) {
-                // Login correcto: guardar usuario en sesión (opcional) y redirigir al HOME PAGE
+                // Login correcto: guardar usuario y rol en sesión y redirigir al HOME PAGE
                 $fila = $resultado->fetch_assoc();
                 $_SESSION['usuario'] = $fila['username'];
+                $_SESSION['rol']     = isset($fila['rol']) ? $fila['rol'] : null;
+                // Bandera de administrador: usuario ADM o rol ADM
+                $_SESSION['es_admin'] = ($_SESSION['usuario'] === 'ADM') || (isset($_SESSION['rol']) && $_SESSION['rol'] === 'ADM');
 
                 header('Location: index.html');
                 exit;
